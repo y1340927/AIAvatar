@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>我的分身 · AI分身</title>
+<style>
+  :root{
+    --side-bg:#2e2e2e; --side-text:#d6d6d6; --side-active:#3a3a3a;
+    --chat-bg:#ededed; --header-bg:#f7f7f7; --user-bubble:#95ec69; --ai-bubble:#ffffff;
+    --green:#07c160; --blue:#10aeff;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    font-family:"PingFang SC","Microsoft YaHei","Segoe UI",system-ui,sans-serif;
+    background:#d9d9de; overflow:hidden; color:#1a1a1a;
+  }
+  /* ---------------- 手机微信式 主框 ---------------- */
+  #app{
+    position:relative; display:flex; width:100%; max-width:460px; height:100vh; height:100dvh;
+    margin:0 auto; background:var(--chat-bg); overflow:hidden;
+  }
+  @media (min-width:521px){
+    body{padding:16px 0;}
+    #app{height:min(92vh,840px);border-radius:24px;border:1px solid #cfcfd5;box-shadow:0 16px 56px rgba(0,0,0,.26);}
+  }
+
+  /* ---------------- 侧栏（抽屉） ---------------- */
+  #sideMask{position:absolute;inset:0;background:rgba(0,0,0,.42);z-index:20;opacity:0;pointer-events:none;transition:opacity .2s;}
+  #sideMask.open{opacity:1;pointer-events:auto;}
+  #sidebar{
+    position:absolute;top:0;bottom:0;left:0;width:84%;max-width:300px;z-index:30;
+    background:var(--side-bg);color:var(--side-text);display:flex;flex-direction:column;
+    transform:translateX(-103%);transition:transform .22s ease;
+  }
+  #sidebar.open{transform:translateX(0);box-shadow:8px 0 34px rgba(0,0,0,.42);}
+  .me{padding:16px 14px 12px;display:flex;align-items:center;gap:10px;border-bottom:1px solid #383838;}
+  .me .names{flex:1;min-width:0;}
+  .me .names b{display:block;color:#fff;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .me .names span{font-size:11px;color:#9a9a9a;cursor:pointer;display:inline-block;margin-top:3px;}
+  .me .names span:hover{color:#fff;}
+  .side-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:12px;}
+  .side-actions button{padding:9px 0;border:none;border-radius:8px;cursor:pointer;background:#3f3f3f;color:#e8e8e8;font-size:13px;transition:.15s;}
+  .side-actions button:hover{background:#4c4c4c;}
+  .side-actions .primary{background:var(--green);color:#fff;font-weight:600;}
+  .side-actions .primary:hover{background:#06ad56;}
+  #sessionList{flex:1;overflow-y:auto;}
+  .sess{position:relative;padding:13px 16px;cursor:pointer;border-left:3px solid transparent;transition:.12s;}
+  .sess:hover{background:#363636;}
+  .sess.active{background:var(--side-active);border-left-color:var(--green);}
+  .sess .t{color:#eee;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:16px;}
+  .sess .t .dot{position:absolute;right:12px;top:15px;width:9px;height:9px;border-radius:50%;background:#fa5151;box-shadow:0 0 0 2px #363636;}
+  .sess .m{color:#8a8a8a;font-size:11px;margin-top:3px;}
+  .side-foot{border-top:1px solid #383838;padding:12px 14px;}
+  #btnMemories{width:100%;padding:9px 0;border:none;border-radius:8px;cursor:pointer;background:#4a3f7a;color:#fff;font-size:13px;}
+  #btnMemories:hover{background:#574a8f;}
+  #memStats{font-size:11px;color:#8a8a8a;margin-top:9px;line-height:1.8;}
+
+  /* ---------------- 聊天主区 ---------------- */
+  #chatArea{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--chat-bg);}
+  #chatHeader{height:56px;background:var(--header-bg);display:flex;align-items:center;gap:10px;padding:0 12px;border-bottom:1px solid #e3e3e3;}
+  #btnSidebar{border:none;background:none;font-size:22px;cursor:pointer;color:#333;padding:2px 6px;}
+  #chatTitle{font-size:15.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  #chatSub{font-size:11px;color:#888;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  #aiAvTop{cursor:pointer;}
+
+  /* ---------------- 头像（图片 + 兜底字母） ---------------- */
+  .avwrap{position:relative;display:inline-flex;width:38px;height:38px;border-radius:8px;overflow:hidden;
+    flex-shrink:0;background:linear-gradient(135deg,#10aeff,#7b61ff);vertical-align:middle;}
+  .avwrap.me{background:linear-gradient(135deg,#ff9a3d,#ff5e62);}
+  .avwrap.lg{width:44px;height:44px;border-radius:10px;font-size:20px;cursor:pointer;}
+  .avimg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;
+    user-select:none;-webkit-user-drag:none;}
+  .avanchor{position:absolute;inset:0;width:100%;height:100%;display:flex;align-items:center;
+    justify-content:center;color:#fff;font-weight:700;font-size:16px;font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji","Twemoji Mozilla",sans-serif;
+    user-select:none;pointer-events:none;text-shadow:0 1px 2px rgba(0,0,0,.25);}
+
+  #msgList{flex:1;overflow-y:auto;padding:16px 14px 8px;scroll-behavior:smooth;}
+  .date-div{text-align:center;font-size:11px;color:#9a9a9a;margin:10px 0 14px;}
+  .msg{display:flex;margin-bottom:14px;align-items:flex-end;gap:8px;}
+  .msg.user{flex-direction:row-reverse;}
+  .bubble{max-width:76%;padding:9px 12px;border-radius:8px;font-size:14.5px;line-height:1.5;
+    word-break:break-word;white-space:pre-wrap;box-shadow:0 1px 2px rgba(0,0,0,.06);}
+  .msg.user .bubble{background:var(--user-bubble);border-top-right-radius:2px;}
+  .msg.ai .bubble{background:var(--ai-bubble);border-top-left-radius:2px;}
+  .bubble img{border-radius:6px;max-width:190px;max-height:240px;display:block;margin:2px 0 4px;}
+  .time{font-size:10px;color:#b0b0b0;margin-top:3px;}
+  .msg.user .time{text-align:right;}
+  .typing .bubble{display:flex;gap:4px;align-items:center;padding:13px 14px;}
+  .typing .dot{width:6px;height:6px;border-radius:50%;background:#aaa;animation:blink 1.2s infinite;}
+  .typing .dot:nth-child(2){animation-delay:.2s}.typing .dot:nth-child(3){animation-delay:.4s}
+  @keyframes blink{0%,80%,100%{opacity:.2}40%{opacity:1}}
+
+  /* ---------------- 输入栏 ---------------- */
+  #inputBar{background:var(--header-bg);border-top:1px solid #e3e3e3;padding:10px 12px;
+    display:flex;align-items:flex-end;gap:8px;}
+  #btnImage{width:38px;height:38px;border-radius:8px;background:#f0f0f0;border:none;cursor:pointer;
+    font-size:19px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  #btnImage:hover{background:#e4e4e4;}
+  #inputText{flex:1;border:none;outline:none;background:#fff;border-radius:8px;padding:9px 12px;
+    font-size:14.5px;resize:none;max-height:110px;font-family:inherit;line-height:1.5;}
+  #btnSend{height:38px;padding:0 20px;border:none;border-radius:8px;background:var(--green);
+    color:#fff;font-size:14px;cursor:pointer;flex-shrink:0;}
+  #btnSend:hover{background:#06ad56;}
+  #btnSend:disabled{opacity:.5;cursor:not-allowed;}
+
+  /* ---------------- 弹窗 ---------------- */
+  .mask{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;
+    justify-content:center;z-index:50;animation:fade .15s;}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .hidden{display:none !important;}
+  .modal{background:#fff;border-radius:14px;width:92%;max-width:560px;max-height:88vh;
+    display:flex;flex-direction:column;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.25);}
+  .m-head{padding:15px 18px;font-size:16px;font-weight:700;border-bottom:1px solid #eee;
+    display:flex;justify-content:space-between;align-items:center;flex-shrink:0;}
+  .m-head button{border:none;background:none;font-size:18px;cursor:pointer;color:#999;}
+  .m-body{padding:16px 18px;overflow-y:auto;flex:1;min-height:0;}
+  .m-body.fixed{flex:0 0 auto;border-top:1px solid #f0f0f0;}
+  .q-item{margin-bottom:16px;}
+  .q-item label{display:block;font-size:13.5px;color:#333;margin-bottom:7px;font-weight:600;}
+  .q-item textarea,.add-row input,.add-row textarea,.add-row select{
+    width:100%;border:1px solid #ddd;border-radius:8px;padding:9px 11px;font-size:14px;
+    outline:none;font-family:inherit;background:#fff;}
+  .chips{display:flex;flex-wrap:wrap;gap:7px;}
+  .chip{padding:6px 12px;border:1px solid #ddd;border-radius:16px;background:#fff;font-size:13px;
+    color:#555;cursor:pointer;transition:.12s;font-family:inherit;}
+  .chip:hover{border-color:var(--green);color:var(--green);}
+  .chip.on{background:var(--green);border-color:var(--green);color:#fff;font-weight:600;}
+  .chip-custom{margin-top:7px;}
+  .chip-custom input{width:100%;border:1px solid #ddd;border-radius:8px;padding:8px 11px;font-size:13px;outline:none;}
+  .tip{font-size:11.5px;color:#999;margin-top:7px;line-height:1.65;}
+  .tip a{color:var(--blue);text-decoration:none;}
+  .api-input{width:100%;border:1px solid #ddd;border-radius:8px;padding:9px 11px;font-size:14px;
+    outline:none;font-family:inherit;background:#fff;letter-spacing:.3px;}
+  .api-input:focus{border-color:var(--green);}
+  .cfg-status{font-weight:400;font-size:11px;margin-left:6px;}
+  .cfg-status.ok{color:#07c160;}
+  .cfg-status.no{color:#fa5151;}
+  .m-foot{padding:12px 18px;border-top:1px solid #eee;display:flex;justify-content:flex-end;gap:10px;flex-shrink:0;}
+  .m-foot button{padding:8px 22px;border:none;border-radius:8px;cursor:pointer;font-size:14px;}
+  .btn-ok{background:var(--green);color:#fff;font-weight:600;}
+  .btn-no{background:#f2f2f2;color:#555;}
+
+  /* ---------------- 记忆库 ---------------- */
+  .tabs{display:flex;gap:6px;margin-bottom:12px;}
+  .tabs button{flex:1;padding:7px 0;border:1px solid #e2e2e2;border-radius:8px;background:#fafafa;
+    font-size:13px;cursor:pointer;color:#555;}
+  .tabs button.on{background:var(--green);border-color:var(--green);color:#fff;font-weight:600;}
+  .add-row{display:flex;gap:8px;margin-bottom:6px;}
+  .add-row select{width:110px;flex-shrink:0;}
+  .add-row textarea{flex:1;height:52px;}
+  .add-btn{width:100%;padding:8px 0;border:none;border-radius:8px;background:#f0f0f0;color:#444;
+    cursor:pointer;font-size:13px;margin-bottom:14px;}
+  .add-btn:hover{background:#e5e5e5;}
+  .mem-item{display:flex;align-items:flex-start;gap:8px;padding:9px 4px;border-bottom:1px solid #f2f2f2;font-size:13.5px;}
+  .mem-item .tag{background:#eef4ff;color:#3a6fd8;border-radius:4px;padding:1px 7px;font-size:11.5px;
+    flex-shrink:0;margin-top:1px;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .mem-item .ct{flex:1;color:#333;line-height:1.5;}
+  .mem-item .rm{background:none;border:none;color:#c33;font-size:16px;cursor:pointer;flex-shrink:0;padding:0 4px;}
+  .mem-item .meta{font-size:10.5px;color:#bbb;margin-top:3px;}
+  .empty{text-align:center;color:#bbb;font-size:13px;padding:30px 0;}
+
+  #toast{position:fixed;left:50%;top:15%;transform:translateX(-50%);background:rgba(0,0,0,.8);
+    color:#fff;padding:11px 20px;border-radius:10px;font-size:13.5px;z-index:99;transition:.2s;
+    opacity:0;pointer-events:none;max-width:86%;text-align:center;}
+  #toast.show{opacity:1;}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="sideMask"></div>
+
+  <!-- 侧栏抽屉 -->
+  <aside id="sidebar">
+    <div class="me">
+      <div id="myAv" class="avwrap lg me" title="点击更换你的头像"></div>
+      <div class="names">
+        <b id="myName">我</b>
+        <span id="profileBadge" title="点击设置分身认识你">未设定 · 点击设定 ➜</span>
+      </div>
+    </div>
+    <div class="side-actions">
+      <button class="primary" id="btnNew">＋ 新会话</button>
+      <button id="btnProfile">🧬 本体设定</button>
+      <button id="btnPros">💬 分身主动聊天</button>
+      <button id="btnMakeover">🎨 分身换形象</button>
+    </div>
+    <div id="sessionList"></div>
+    <div class="side-foot">
+      <button id="btnApiConfig" style="width:100%;padding:9px 0;border:none;border-radius:8px;cursor:pointer;background:#2d5a8a;color:#fff;font-size:13px;margin-bottom:8px;">⚙️ API设置</button>
+      <button id="btnMemories">🧠 记忆库（分身记得的事）</button>
+      <div id="memStats">分身学习中…</div>
+    </div>
+  </aside>
+
+  <!-- 聊天主区 -->
+  <main id="chatArea">
+    <header id="chatHeader">
+      <button id="btnSidebar">☰</button>
+      <div id="aiAvTop" class="avwrap ai" title="点击让分身自己换个新形象（AI生成头像+网名）"></div>
+      <div style="flex:1;min-width:0;">
+        <div id="chatTitle">我的分身</div>
+        <div id="chatSub">AI分身 · 正在学习你的说话方式…</div>
+      </div>
+    </header>
+    <div id="msgList"></div>
+    <footer id="inputBar">
+      <label id="btnImage" title="发图片">📷<input type="file" id="fileInput" accept="image/*" hidden></label>
+      <textarea id="inputText" rows="1" placeholder="和你的分身说点什么…（Enter 发送）"></textarea>
+      <button id="btnSend">发送</button>
+    </footer>
+    <input type="file" id="avatarFile" accept="image/*" hidden>
+  </main>
+</div>
+
+<!-- 本体设定弹窗 -->
+<div class="mask hidden" id="modalProfile">
+  <div class="modal">
+    <div class="m-head">让分身认识你<span style="font-weight:400;font-size:12px;color:#999;">　点选即可，可多选，越细越像</span>
+      <button data-close="modalProfile">✕</button></div>
+    <div class="m-body" id="profileForm"></div>
+    <div class="m-body fixed">
+      <div class="q-item">
+        <label>分身主动找你聊天、自我学习</label>
+        <div class="chips" data-pro="interval">
+          <button type="button" class="chip" data-v="off">关闭</button>
+          <button type="button" class="chip" data-v="10">每10分钟</button>
+          <button type="button" class="chip" data-v="30">每30分钟</button>
+          <button type="button" class="chip" data-v="60">每1小时</button>
+          <button type="button" class="chip" data-v="240">每4小时</button>
+        </div>
+        <p class="tip">开启后，分身在你不找它时，也会隔一段时间主动给你发消息、和你聊天来学习提升自己；还会偶尔自己换网名和 AI 生成的头像。可随时一键让分身马上来聊天。</p>
+      </div>
+    </div>
+    <div class="m-foot"><button class="btn-no" data-close="modalProfile">稍后再说</button>
+      <button class="btn-ok" id="saveProfile">保存</button></div>
+  </div>
+</div>
+
+<!-- 新会话 -->
+<div class="mask hidden" id="modalNew">
+  <div class="modal" style="max-width:380px;">
+    <div class="m-head">新会话<button data-close="modalNew">✕</button></div>
+    <div class="m-body"><input id="newTitle" placeholder="给这个会话起个名字（可留空）" value=""></div>
+    <div class="m-foot"><button class="btn-no" data-close="modalNew">取消</button>
+      <button class="btn-ok" id="confirmNew">创建</button></div>
+  </div>
+</div>
+
+<!-- 记忆库 -->
+<div class="mask hidden" id="modalMem">
+  <div class="modal">
+    <div class="m-head">🧠 记忆库<button data-close="modalMem">✕</button></div>
+    <div class="m-body">
+      <p style="font-size:12px;color:#999;margin-bottom:10px;">这里存着分身记住的关于你的事，可随时查看、手动添加或删除。删掉一条它就会"忘记"。</p>
+      <div id="userAvBox" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#f7f7fb;border-radius:10px;margin-bottom:12px;">
+        <div id="userAvPreview" class="avwrap me lg"></div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;font-weight:600;margin-bottom:3px;">分身对你的印象</div>
+          <div id="userAvDesc" style="font-size:12px;color:#666;line-height:1.55;">（还没识别你的头像，点右边按钮让分身认一下～）</div>
+        </div>
+        <button id="btnRecogAv" style="background:#fff;border:1px solid var(--green);color:var(--green);border-radius:8px;padding:7px 10px;font-size:12px;cursor:pointer;flex-shrink:0;">重新识别</button>
+      </div>
+      <div class="tabs">
+        <button data-grp="person">人设</button>
+        <button data-grp="preference" class="on">喜好</button>
+        <button data-grp="event">事件</button>
+      </div>
+      <div class="add-row">
+        <select id="addGroup"><option value="preference">喜好</option><option value="event">事件</option><option value="person">人设</option></select>
+        <textarea id="addContent" placeholder="输入一条想让分身记住的内容，如：我喜欢喝美式咖啡"></textarea>
+      </div>
+      <div class="add-row"><input id="addTag" placeholder="标签（如：爱好/讨厌/口头禅，可留空）" style="width:100%;"></div>
+      <button class="add-btn" id="addMemory">＋ 添加记忆</button>
+      <div id="memList"></div>
+    </div>
+  </div>
+</div>
+
+<!-- API设置弹窗 -->
+<div class="mask hidden" id="modalApi">
+  <div class="modal" style="max-width:440px;">
+    <div class="m-head">⚙️ API 设置<button data-close="modalApi">✕</button></div>
+    <div class="m-body">
+      <p style="font-size:12px;color:#999;margin-bottom:14px;line-height:1.6;">API Key 仅保存在你本地的 <b>config.json</b> 中，不会上传到任何服务器。首次使用需填写后才能聊天。</p>
+      <div class="q-item">
+        <label>硅基流动 API Key <span id="siliconStatus" class="cfg-status"></span></label>
+        <input class="api-input" id="apiSilicon" type="password" placeholder="sk-..." autocomplete="off" spellcheck="false">
+        <p class="tip">用于文字对话（Qwen2.5-7B，免费）。在 <a href="https://cloud.siliconflow.cn" target="_blank">cloud.siliconflow.cn</a> 注册获取。留空则保留已配置的密钥。</p>
+      </div>
+      <div class="q-item">
+        <label>智谱 API Key <span id="zhipuStatus" class="cfg-status"></span></label>
+        <input class="api-input" id="apiZhipu" type="password" placeholder="..." autocomplete="off" spellcheck="false">
+        <p class="tip">用于图片识别（GLM-4V）和文生图（CogView，免费额度）。在 <a href="https://open.bigmodel.cn" target="_blank">open.bigmodel.cn</a> 注册获取。留空则保留已配置的密钥。</p>
+      </div>
+    </div>
+    <div class="m-foot"><button class="btn-no" data-close="modalApi">取消</button>
+      <button class="btn-ok" id="saveApiConfig">保存</button></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+const state = { sessions: [], current: null, messages: [], meta: null, memGroup: "preference",
+                stats: null, pending: null, alerted: false, avatarVer: "0" };
+
+/* ---------------- 工具 ---------------- */
+async function api(path, opt = {}) {
+  const res = await fetch(path, {
+    method: opt.method || "GET",
+    headers: opt.body ? { "Content-Type": "application/json" } : undefined,
+    body: opt.body ? JSON.stringify(opt.body) : undefined,
+  });
+  const j = await res.json().catch(() => ({ ok: false }));
+  if (!j.ok) throw new Error(j.error || "请求失败");
+  return j;
+}
+function toast(msg) {
+  const t = $("#toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 2600);
+}
+function esc(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function pad(n) { return n < 10 ? "0" + n : "" + n; }
+function fmtTime(ts) {
+  const d = new Date(ts * 1000);
+  const hm = pad(d.getHours()) + ":" + pad(d.getMinutes());
+  const today = new Date(); const sameDay = d.toDateString() === today.toDateString();
+  const ampm = d.getHours() < 12 ? "上午 " : "下午 ";
+  return (sameDay ? "" : (d.getFullYear() + "年" + (d.getMonth() + 1) + "月" + d.getDate() + "日 ")) + ampm + hm;
+}
+function fmtDate(ts) {
+  const d = new Date(ts * 1000);
+  const today = new Date();
+  const yest = new Date(today); yest.setDate(yest.getDate() - 1);
+  if (d.toDateString() === today.toDateString()) return "今天";
+  if (d.toDateString() === yest.toDateString()) return "昨天";
+  return (d.getFullYear() !== today.getFullYear() ? d.getFullYear() + "年" : "") + (d.getMonth() + 1) + "月" + d.getDate() + "日";
+}
+
+/* ---------------- 头像 / 身份渲染 ---------------- */
+function aiLetter() {
+  let em = "分";
+  try { if (state.meta && state.meta.ai_avatar_style) em = JSON.parse(state.meta.ai_avatar_style).emoji || em; } catch (e) {}
+  return em;
+}
+function avNode(who, extra) {
+  const meta = state.meta || {};
+  const avatar = who === "me" ? (meta.user_avatar || "") : (meta.ai_avatar || "");
+  const letter = who === "me" ? "我" : aiLetter();
+  return `<span class="avwrap ${who} ${extra || ""}">` +
+    (avatar ? `<img class="avimg" src="${avatar}" alt="" onerror="this.remove()">` : "") +
+    `<span class="avanchor">${letter}</span></span>`;
+}
+function renderIdentity() {
+  const m = state.meta;
+  if (!m) return;
+  $("#myName").textContent = (m.name && m.name !== "我") ? m.name : "我";
+  $("#profileBadge").textContent = m.profile_done ? "已完成设定 · 点击修改" : "未设定 · 点击设定 ➜";
+  $("#chatTitle").textContent = m.ai_name || "我的分身";
+  document.title = (m.ai_name || "我的分身") + " · 我的AI分身";
+  const pro = m.proactive_enabled;
+  $("#chatSub").textContent = pro ? "AI分身 · 正在学习你的说话方式…" : "AI分身 · 主动学习已关闭";
+  $("#myAv").innerHTML = avNode("me");
+  $("#aiAvTop").innerHTML = avNode("ai");
+}
+async function loadMeta() {
+  const j = await api("/api/meta");
+  state.meta = j.meta;
+  state.avatarVer = j.meta.ai_avatar_ver;
+  renderIdentity();
+  return j.meta;
+}
+
+/* ---------------- 会话 ---------------- */
+async function renderSessionList() {
+  const j = await api("/api/sessions");
+  state.sessions = j.sessions;
+  const list = $("#sessionList");
+  list.innerHTML = "";
+  for (const s of j.sessions) {
+    const div = document.createElement("div");
+    div.className = "sess" + (state.current === s.id ? " active" : "");
+    div.dataset.id = s.id;
+    const isNew = state.pending && state.pending.session_id === s.id;
+    div.innerHTML = `<div class="t">${esc(s.title)}${isNew ? '<span class="dot" title="新消息"></span>' : ""}</div>` +
+                    `<div class="m">${s.msg_count} 条消息</div>`;
+    div.onclick = () => switchSession(s.id);
+    div.oncontextmenu = e => { e.preventDefault(); if (confirm("删除这个会话？消息记录也会一并删除。")) delSession(s.id); };
+    list.appendChild(div);
+  }
+}
+async function loadSessions() {
+  await renderSessionList();
+  if (!state.current && state.sessions.length) switchSession(state.sessions[0].id);
+}
+async function switchSession(id) {
+  state.current = id; state.messages = [];
+  closeSidebar();
+  $("#msgList").innerHTML = "";
+  const j = await api("/api/messages?session=" + id);
+  state.messages = j.messages;
+  renderMessages();
+  if (state.pending && state.pending.session_id === id) {
+    api("/api/proactive_consume", { method: "POST" }).catch(() => {});
+    state.pending = null; state.alerted = false;
+  }
+  renderSessionList();
+}
+async function delSession(id) {
+  await api("/api/sessions/" + id, { method: "DELETE" });
+  if (state.current === id) state.current = null;
+  await loadSessions();
+  toast("会话已删除");
+}
+function closeSidebar() { $("#sidebar").classList.remove("open"); $("#sideMask").classList.remove("open"); }
+
+/* ---------------- 消息渲染 ---------------- */
+function renderMessages() {
+  const box = $("#msgList");
+  box.innerHTML = "";
+  let lastDate = "", lastRole = "";
+  for (const m of state.messages) {
+    const d = new Date(m.created_at * 1000).toDateString();
+    if (d !== lastDate) {
+      const div = document.createElement("div"); div.className = "date-div";
+      div.textContent = fmtDate(m.created_at);
+      box.appendChild(div); lastDate = d;
+    }
+    box.appendChild(bubbleNode(m, lastRole === m.role));
+    lastRole = m.role;
+  }
+  box.scrollTop = box.scrollHeight;
+}
+function bubbleNode(m, sameAsPrev) {
+  const wrap = document.createElement("div");
+  wrap.className = "msg " + (m.role === "user" ? "user" : "ai");
+  const av = m.role === "user" ? avNode("me") : avNode("ai");
+  const img = m.image ? `<img src="${m.image}" alt="图片" onerror="this.style.display='none';this.nextElementSibling&&this.nextElementSibling.style.display='inline-block';">` : "";
+  const imgFail = m.image ? `<span style="display:none;font-size:12px;color:#999;background:#f5f5f5;padding:4px 8px;border-radius:4px;">图片加载失败</span>` : "";
+  const txt = esc(m.content || "").replace(/\n{2,}/g, "\n").replace(/^[\s\r\n]+|[\s\r\n]+$/g, "").replace(/\n/g, "<br>");
+  wrap.innerHTML = av + `<div style="max-width:78%;"><div class="bubble">${img}${imgFail}${txt}</div>` +
+    (sameAsPrev ? "" : `<div class="time">${fmtTime(m.created_at)}</div>`) + `</div>`;
+  return wrap;
+}
+function showTyping() {
+  const box = $("#msgList");
+  const div = document.createElement("div");
+  div.className = "msg ai typing"; div.id = "typing";
+  div.innerHTML = `${avNode("ai")}<div class="bubble"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>`;
+  box.appendChild(div); box.scrollTop = box.scrollHeight;
+}
+function hideTyping() { const t = $("#typing"); if (t) t.remove(); }
+
+/* ---------------- 发送 ---------------- */
+function compressImage(file) {
+  return new Promise((resolve, reject) => {
+    const rd = new FileReader();
+    rd.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 1280, scale = Math.min(1, MAX / Math.max(img.width, img.height));
+        const c = document.createElement("canvas");
+        c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        resolve(c.toDataURL("image/jpeg", 0.82));
+      };
+      img.onerror = reject;
+      img.src = rd.result;
+    };
+    rd.onerror = reject;
+    rd.readAsDataURL(file);
+  });
+}
+async function sendMessage(text, image) {
+  if (!text && !image) return;
+  if (!state.current) { toast("请先创建会话"); return; }
+  const btn = $("#btnSend"); btn.disabled = true; btn.textContent = "思考中…";
+  const tmp = { id: -Date.now(), session_id: state.current, role: "user", content: text, image: image || "", created_at: Date.now() / 1000 };
+  state.messages.push(tmp);
+  const box = $("#msgList");
+  const d = new Date();
+  const last = $("#msgList .date-div:last-child");
+  if (!last || last.textContent !== fmtTime(d.getTime() / 1000)) {
+    const div = document.createElement("div"); div.className = "date-div"; div.textContent = fmtTime(d.getTime() / 1000);
+    box.appendChild(div);
+  }
+  box.appendChild(bubbleNode(tmp, false));
+  box.scrollTop = box.scrollHeight;
+  // 后台请求，不在聊天框中显示"加载中"动画 —— 直接等 AI 回复完一次性显示
+  try {
+    const j = await api("/api/chat", { method: "POST", body: { session_id: state.current, text: text || "", image: image || "" } });
+    state.messages.push({ id: -Date.now() + 1, role: "assistant", content: j.data.reply, image: j.data.image || "", created_at: Date.now() / 1000 });
+  } catch (e) {
+    toast(e.message || "分身没回复成功");
+    btn.disabled = false; btn.textContent = "发送";
+    return;
+  }
+  renderMessages();
+  btn.disabled = false; btn.textContent = "发送";
+  $("#inputText").focus();
+  loadSessions(); refreshStats();
+}
+
+/* ---------------- 记忆 / 统计 ---------------- */
+async function refreshStats() {
+  try {
+    const j = await api("/api/memstats");
+    state.stats = j.stats;
+    const g = j.stats.groups;
+    const pro = j.stats.proactive_enabled
+      ? `分身主动学习：已开（每${j.stats.proactive_interval_min}分钟）· 已主动 ${j.stats.proactive_count} 次`
+      : "分身主动学习：已关闭";
+    $("#memStats").innerHTML =
+      `已记住：人设 ${g.person} · 偏好 ${g.preference} · 事件 ${g.event}<br>` +
+      (j.stats.learn_rounds > 0
+        ? `已自动学习 ${j.stats.learn_rounds} 轮　<span style="color:#7ecb8f;">越聊越像你 ✓</span><br>`
+        : "正在观察你的说话习惯…<br>") + pro;
+  } catch (e) { /* 忽略 */ }
+}
+/* ---------------- API 配置 ---------------- */
+let apiConfig = { silicon_configured: false, zhipu_configured: false };
+async function loadApiConfig() {
+  try {
+    const j = await api("/api/config");
+    apiConfig = j.config;
+  } catch (e) { /* 忽略 */ }
+  return apiConfig;
+}
+function _cfgStatus(el, configured) {
+  el.textContent = configured ? "● 已配置" : "○ 未配置";
+  el.className = "cfg-status " + (configured ? "ok" : "no");
+}
+async function openApiConfig() {
+  await loadApiConfig();
+  _cfgStatus($("#siliconStatus"), apiConfig.silicon_configured);
+  _cfgStatus($("#zhipuStatus"), apiConfig.zhipu_configured);
+  $("#apiSilicon").value = "";
+  $("#apiZhipu").value = "";
+  $("#modalApi").classList.remove("hidden");
+}
+async function saveApiConfig() {
+  const sk = $("#apiSilicon").value.trim();
+  const zk = $("#apiZhipu").value.trim();
+  if (!sk && !zk) { toast("未输入任何内容，已保留原有配置"); $("#modalApi").classList.add("hidden"); return; }
+  const body = {};
+  if (sk) body.silicon_key = sk;
+  if (zk) body.zhipu_key = zk;
+  try {
+    const j = await api("/api/config", { method: "POST", body });
+    apiConfig = j.config;
+    $("#modalApi").classList.add("hidden");
+    toast("✅ API 配置已保存");
+  } catch (e) {
+    toast("保存失败: " + e.message);
+  }
+}
+
+let memCurGrp = "preference";
+async function openMemories() {
+  $("#modalMem").classList.remove("hidden"); memCurGrp = "preference";
+  document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("on", b.dataset.grp === memCurGrp));
+  // 渲染"分身对你的印象"（头像+描述）
+  await renderUserAvatarDesc();
+  renderMemories();
+}
+async function renderUserAvatarDesc() {
+  const m = state.meta || {};
+  $("#userAvPreview").innerHTML = avNode("me");
+  const desc = (m.user_avatar_desc || "").trim();
+  $("#userAvDesc").textContent = desc || "（还没识别你的头像，点右边按钮让分身认一下～）";
+  $("#btnRecogAv").disabled = !m.user_avatar;
+  $("#btnRecogAv").textContent = desc ? "重新识别" : "识别头像";
+  $("#btnRecogAv").style.opacity = m.user_avatar ? "1" : "0.45";
+}
+async function renderMemories() {
+  const list = $("#memList");
+  list.innerHTML = '<div class="empty">加载中…</div>';
+  const j = await api("/api/memories?group=" + memCurGrp);
+  const mems = j.memories;
+  if (!mems.length) { list.innerHTML = '<div class="empty">这个分组还没有记忆<br>聊得越多（或手动添加），分身记得越多</div>'; return; }
+  list.innerHTML = "";
+  for (const m of mems) {
+    const div = document.createElement("div"); div.className = "mem-item";
+    const lu = m.last_used ? new Date(m.last_used * 1000) : null;
+    const dateStr = lu ? (pad(lu.getMonth() + 1) + "-" + pad(lu.getDate())) : "未使用";
+    div.innerHTML = `<span class="tag">${esc(m.tag || "记忆")}</span>
+      <div class="ct">${esc(m.content)}<div class="meta">最近使用 ${dateStr} · 用过 ${m.use_count || 0} 次</div></div>
+      <button class="rm" title="删除">✕</button>`;
+    div.querySelector(".rm").onclick = async () => {
+      await api("/api/memories/" + m.id, { method: "DELETE" });
+      renderMemories(); refreshStats(); toast("已让分身忘记这条");
+    };
+    list.appendChild(div);
+  }
+}
+
+/* ---------------- 本体设定（选项选择型） ---------------- */
+const PROFILE_GROUPS = [
+  { q: "你的称呼（名字/昵称）", type: "text", k: "name" },
+  { q: "你的说话风格", multi: true, chips: ["短句多", "爱用表情", "网络热梗多", "温柔", "直来直去", "幽默爱开玩笑", "高冷话少", "话痨", "毒舌", "口头禅多", "礼貌客气", "爱吐槽", "可甜可盐"] },
+  { q: "性格关键词", multi: true, chips: ["乐观开朗", "内向慢热", "外向活泼", "理性冷静", "感性文艺", "刀子嘴豆腐心", "随和好脾气", "强势有主见", "爱操心", "懒散拖延", "浪漫", "爱整活", "逗比", "靠谱"] },
+  { q: "兴趣爱好", multi: true, chips: ["游戏", "音乐", "电影", "运动健身", "美食", "旅行", "读书", "二次元/动漫", "编程/科技", "摄影", "宠物", "购物", "睡觉", "追剧", "桌游", "麻将", "钓鱼", "书法绘画", "手工DIY"] },
+  { q: "讨厌的事/雷区", multi: true, chips: ["油腻说教", "被催", "已读不回", "剧透", "八卦", "虚伪", "加班", "早起", "等人", "推销", "抠门", "负能量爆棚", "被放鸽子"] },
+  { q: "口头禅/常用语", multi: true, chips: ["好家伙", "绝了", "666", "笑死", "尊嘟假嘟", "芭比Q", "绷不住了", "有点东西", "麻了", "离谱", "真的假的", "行吧", "芜湖起飞", "谁懂啊", "汗流浃背了", "栓Q"] },
+  { q: "一天里什么时候最活跃", multi: false, chips: ["早上", "上午", "中午", "下午", "晚上", "深夜", "随时在线"] },
+  { q: "回消息的习惯", multi: false, chips: ["秒回型", "看到就回", "忙完再回", "想起来才回", "已读必回", "喜欢发表情包"] },
+  { q: "表达情感的方式", multi: false, chips: ["直接外露", "含蓄内敛", "看人看心情", "用表情包代替", "爱打直球"] },
+  { q: "平时和谁聊天最多", multi: true, chips: ["同学", "同事", "网友", "家人", "对象", "游戏搭子", "都不固定"] },
+  { q: "希望分身的聊天氛围", multi: false, chips: ["像兄弟/姐妹", "像朋友", "像对象", "像损友", "像小助理", "像乐子搭子", "像家人"] },
+  { q: "上网冲浪浓度", multi: false, chips: ["重度冲浪（梗王）", "中度冲浪", "轻度", "基本不上网"] },
+  { q: "其他想让分身长期记住的（可选）", type: "text" },
+];
+function renderProfileForm(pd) {
+  const list = (pd && pd.data && pd.data.choices) || [];
+  const map = {};
+  list.forEach(c => { map[c.q] = c; });
+  const nameSaved = (pd && pd.data && pd.data.name) || "";
+  const html = PROFILE_GROUPS.map((g, i) => {
+    const saved = map[g.q] || {};
+    if (g.type === "text") {
+      const v = g.k === "name" ? nameSaved : (saved.custom || (saved.opts && saved.opts[0]) || "");
+      return `<div class="q-item"><label>${i + 1}. ${g.q}</label>
+        <textarea rows="2" data-q="${esc(g.q)}" data-role="text" ${g.k === "name" ? 'id="pfName"' : ""}>${esc(v)}</textarea></div>`;
+    }
+    const sel = new Set(saved.opts || []);
+    const chips = g.chips.map(c => `<button type="button" class="chip${sel.has(c) ? " on" : ""}" data-v="${esc(c)}">${esc(c)}</button>`).join("");
+    return `<div class="q-item"><label>${i + 1}. ${g.q}${g.multi ? "（可多选）" : ""}</label>
+      <div class="chips" data-q="${esc(g.q)}" data-multi="${g.multi ? 1 : 0}">${chips}</div>
+      <div class="chip-custom"><input data-role="custom" placeholder="自定义补充（可选）" value="${esc(saved.custom || "")}"></div></div>`;
+  }).join("");
+  $("#profileForm").innerHTML = html;
+  // 主动学习设置预填
+  const pe = pd && pd.proactive_enabled !== undefined ? pd.proactive_enabled : true;
+  const pi = pd ? Math.round(pd.proactive_interval_min || 30) : 30;
+  document.querySelectorAll("[data-pro=interval] .chip").forEach(b => {
+    b.classList.toggle("on", (!pe || pi === 0) ? b.dataset.v === "off" : b.dataset.v === String(pi));
+  });
+}
+function collectProfile() {
+  const pf = $("#pfName");
+  const name = (pf && pf.value.trim()) || "我";
+  const choices = [];
+  document.querySelectorAll("#profileForm .q-item").forEach(item => {
+    const qEl = item.querySelector("[data-q]");
+    const q = qEl ? qEl.dataset.q : "";
+    const cu = item.querySelector("[data-role=custom]");
+    const tx = item.querySelector("[data-role=text]");
+    const custom = cu ? cu.value.trim() : (tx ? tx.value.trim() : "");
+    let opts = [];
+    if (item.querySelector(".chips")) opts = [...item.querySelectorAll(".chip.on")].map(b => b.dataset.v);
+    if (q && (opts.length || custom)) choices.push({ q, opts, custom });
+  });
+  const iOn = document.querySelector("[data-pro=interval] .chip.on");
+  const v = iOn ? iOn.dataset.v : "30";
+  return { name, choices, proactive_enabled: v !== "off", proactive_interval_min: v === "off" ? 30 : parseInt(v, 10) };
+}
+async function openProfile() {
+  let pd = null;
+  try { const j = await api("/api/profile"); pd = j.profile; } catch (e) {}
+  renderProfileForm(pd);
+  $("#modalProfile").classList.remove("hidden");
+}
+async function saveProfile() {
+  const body = collectProfile();
+  await api("/api/profile", { method: "POST", body });
+  $("#modalProfile").classList.add("hidden");
+  await loadMeta();
+  toast("已保存！分身开始学习你的风格了");
+  refreshStats(); loadSessions();
+}
+
+/* ---------------- 主动学习 / 换形象 ---------------- */
+function triggerMakeover() {
+  toast("🎨 分身开始给自己设计新形象了，稍等几秒…");
+  api("/api/makeover", { method: "POST" }).catch(() => {});
+}
+async function pollOnce() {
+  try {
+    const j = await api("/api/poll");
+    const p = j.poll;
+    // 分身换了形象（头像/网名）→ 自动刷新
+    if (p.ai_avatar_ver && p.ai_avatar_ver !== state.avatarVer) {
+      state.avatarVer = p.ai_avatar_ver;
+      if (state.meta) { state.meta.ai_avatar = p.ai_avatar; state.meta.ai_name = p.ai_name; }
+      renderIdentity(); renderMessages();
+      toast(`🎨 分身换了新形象${p.ai_name ? "（" + p.ai_name + "）" : ""}`);
+    }
+    // 分身主动发来消息
+    if (p.pending) {
+      state.pending = p;
+      if (state.current === p.session_id) {
+        if (!state.alerted) { toast("💬 分身给你发来消息"); state.alerted = true; }
+        const jm = await api("/api/messages?session=" + p.session_id);
+        state.messages = jm.messages;
+        renderMessages();
+        api("/api/proactive_consume", { method: "POST" }).catch(() => {});
+        state.pending = null; state.alerted = false;
+        renderSessionList();
+      } else {
+        renderSessionList();
+        if (!state.alerted) {
+          toast("💬 你的分身主动找你了，点左侧会话看看");
+          state.alerted = true;
+          setTimeout(() => { state.alerted = false; }, 15000);
+        }
+      }
+    } else if (state.pending) {
+      state.pending = null; state.alerted = false; renderSessionList();
+    }
+  } catch (e) { /* 忽略 */ }
+}
+
+/* ---------------- 绑定 ---------------- */
+function bindEvents() {
+  $("#btnSend").onclick = () => { const t = $("#inputText").value.trim(); if (t) { sendMessage(t, ""); $("#inputText").value = ""; autoGrow(); } };
+  $("#inputText").addEventListener("keydown", e => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("#btnSend").click(); }
+  });
+  $("#inputText").addEventListener("input", autoGrow);
+  $("#fileInput").addEventListener("change", async e => {
+    const f = e.target.files[0]; e.target.value = "";
+    if (!f) return;
+    if (f.size > 10 * 1024 * 1024) { toast("图片太大，请选择 10MB 以内的"); return; }
+    try {
+      const dataUrl = await compressImage(f);
+      $("#inputText").value = ""; autoGrow();
+      sendMessage("", dataUrl);
+    } catch (err) { toast("图片处理失败"); }
+  });
+  $("#avatarFile").addEventListener("change", async e => {
+    const f = e.target.files[0]; e.target.value = "";
+    if (!f) return;
+    if (f.size > 10 * 1024 * 1024) { toast("图片太大"); return; }
+    try {
+      const dataUrl = await compressImage(f);
+      await api("/api/avatar", { method: "POST", body: { who: "user", data: dataUrl } });
+      state.meta.user_avatar = dataUrl;
+      renderIdentity();
+      toast("你的头像已更新");
+    } catch (err) { toast("头像设置失败"); }
+  });
+
+  $("#btnSidebar").onclick = () => { $("#sidebar").classList.toggle("open"); $("#sideMask").classList.toggle("open"); };
+  $("#sideMask").onclick = closeSidebar;
+  $("#myAv").onclick = () => $("#avatarFile").click();
+  $("#aiAvTop").onclick = triggerMakeover;
+  $("#profileBadge").onclick = openProfile;       // ★ "已完成设定 · 点击修改" 现在可以点击了
+  $("#btnProfile").onclick = openProfile;
+  $("#btnNew").onclick = () => $("#modalNew").classList.remove("hidden");
+  $("#confirmNew").onclick = async () => {
+    const title = $("#newTitle").value.trim();
+    const j = await api("/api/sessions", { method: "POST", body: { title } });
+    $("#modalNew").classList.add("hidden"); $("#newTitle").value = "";
+    state.current = j.data.id; state.messages = [];
+    $("#msgList").innerHTML = "";
+    await loadSessions();
+    toast("新会话已创建");
+  };
+  $("#saveProfile").onclick = saveProfile;
+  $("#btnMemories").onclick = openMemories;
+  $("#btnApiConfig").onclick = openApiConfig;
+  $("#saveApiConfig").onclick = saveApiConfig;
+  $("#btnRecogAv").onclick = async () => {
+    if (!state.meta || !state.meta.user_avatar) { toast("请先上传头像再识别"); return; }
+    toast("正在让分身重新看你的头像…");
+    try {
+      await api("/api/avatar_recognize", { method: "POST" });
+      for (let i = 0; i < 8; i++) {
+        await new Promise(r => setTimeout(r, 1500));
+        const m = await loadMeta();
+        if (m.user_avatar_desc) { toast("✅ 分身已经看到你的头像了"); renderUserAvatarDesc(); return; }
+      }
+      toast("识别超时，稍后再试");
+    } catch (e) { toast("识别失败: " + e.message); }
+  };
+  $("#btnPros").onclick = async () => {
+    try {
+      const j = await api("/api/proactive", { method: "POST" });
+      if (j.data.already) toast("分身已经留了一条消息，去会话里看看吧 👀");
+      else toast("💬 分身给你发了条消息");
+      pollOnce();
+    } catch (e) { toast("分身这会儿开小差了：" + e.message); }
+  };
+  $("#btnMakeover").onclick = triggerMakeover;
+  $("#addMemory").onclick = async () => {
+    const content = $("#addContent").value.trim();
+    if (!content) { toast("请输入内容"); return; }
+    await api("/api/memories", { method: "POST", body: { group: $("#addGroup").value, tag: $("#addTag").value.trim(), content } });
+    $("#addContent").value = ""; $("#addTag").value = "";
+    toast("已添加"); renderMemories(); refreshStats();
+  };
+  const memTabs = document.querySelectorAll(".tabs button");
+  memTabs.forEach(b => b.onclick = () => {
+    memTabs.forEach(x => x.classList.toggle("on", x === b)); memCurGrp = b.dataset.grp; renderMemories();
+  });
+  document.querySelectorAll("[data-close]").forEach(b => b.onclick = () => $("#" + b.dataset.close).classList.add("hidden"));
+  document.querySelectorAll(".mask").forEach(mask => mask.addEventListener("click", e => {
+    if (e.target === mask) mask.classList.add("hidden");
+  }));
+  // 选项 chip 点击（支持单选/多选/主动学习档位）
+  document.addEventListener("click", e => {
+    const c = e.target.closest(".chip");
+    if (!c) return;
+    const box = c.closest(".chips");
+    if (!box) return;
+    if (box.hasAttribute("data-pro")) {           // 主动学习档位：单选
+      box.querySelectorAll(".chip").forEach(x => x.classList.toggle("on", x === c));
+      return;
+    }
+    if (box.dataset.multi === "1") { c.classList.toggle("on"); }
+    else { box.querySelectorAll(".chip").forEach(x => x.classList.remove("on")); c.classList.add("on"); }
+  });
+}
+function autoGrow() {
+  const t = $("#inputText");
+  t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 110) + "px";
+}
+
+/* ---------------- 初始化 ---------------- */
+async function init() {
+  bindEvents();
+  await loadMeta();
+  const cfg = await loadApiConfig();
+  if (!cfg.silicon_configured) {
+    // 首次使用未配置API Key，先引导用户填写
+    setTimeout(() => { openApiConfig(); toast("👋 首次使用请先配置 API Key"); }, 400);
+  }
+  if (state.meta.profile_done) {
+    $("#profileBadge").textContent = "已完成设定 · 点击修改";
+  } else if (cfg.silicon_configured) {
+    openProfile();
+  }
+  await loadSessions();
+  refreshStats();
+  setInterval(refreshStats, 12000);
+  setInterval(pollOnce, 12000);
+  setTimeout(pollOnce, 2000);
+}
+init();
+</script>
+</body>
+</html>

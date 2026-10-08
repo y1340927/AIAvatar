@@ -1,0 +1,23 @@
+# 隐私与运行时数据（切勿上传）
+config.json
+mem.db
+mem.db-shm
+mem.db-wal
+mem.db.bak.*
+.img_cache/
+__pycache__/
+*.pyc
+*.pyo
+
+# 系统/编辑器
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# 日志与临时
+*.log
+smoke_out.txt
+_patch_*.py
